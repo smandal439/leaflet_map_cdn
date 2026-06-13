@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 GPS Tracker - Real-time MQTT Map</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <!-- Header -->
+      <div class="sidebar-header">
+        <div class="logo-icon">
+          <i data-lucide="map-pin" style="color: white; width: 22px; height: 22px;"></i>
+        </div>
+        <div>
+          <h1>ESP32 GPS Tracker</h1>
+          <p>Real-time MQTT Telemetry</p>
+        </div>
+      </div>
+      
+      <!-- Scrollable Content -->
+      <div class="sidebar-content">
+        
+        <!-- Connection Status Indicator Card -->
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 14px; font-weight: 500; color: var(--text-secondary);">Broker Status</span>
+            <div id="connection-pill" class="status-pill disconnected">
+              <span class="status-indicator-dot"></span>
+              <span id="connection-status-text">Disconnected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- MQTT Configuration Card -->
+        <div class="card">
+          <div class="card-title">
+            <i data-lucide="settings"></i> MQTT Configuration
+          </div>
+          <div class="form-group">
+            <label for="mqtt-broker">WebSocket Broker URL</label>
+            <input type="text" id="mqtt-broker" placeholder="wss://broker.emqx.io:8084/mqtt" value="wss://broker.emqx.io:8084/mqtt">
+          </div>
+          <div class="form-group">
+            <label for="mqtt-topic">Topic (Wildcards Allowed)</label>
+            <input type="text" id="mqtt-topic" placeholder="esp32/+/location" value="esp32/+/location">
+          </div>
+          <div class="form-row form-group">
+            <div>
+              <label for="mqtt-username">Username (Optional)</label>
+              <input type="text" id="mqtt-username" placeholder="User">
+            </div>
+            <div>
+              <label for="mqtt-password">Password (Optional)</label>
+              <input type="password" id="mqtt-password" placeholder="Pass">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <button id="connect-btn" class="btn btn-primary">Connect Broker</button>
+          </div>
+        </div>
+
+        <!-- Active Devices List Card -->
+        <div class="card">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span><i data-lucide="list"></i> Active Devices</span>
+            <span id="device-count" class="status-pill disconnected" style="padding: 2px 8px; font-size: 11px;">0</span>
+          </div>
+          <div id="device-list" class="device-list">
+            <div class="no-devices">No devices active. Connect broker or start simulation.</div>
+          </div>
+        </div>
+
+        <!-- Telemetry Data Card -->
+        <div class="card">
+          <div class="card-title">
+            <i data-lucide="cpu"></i> Telemetry: <span id="selected-device-id" style="color: var(--primary); text-transform: none; font-size: 13px; font-family: var(--font-mono); margin-left: auto;">Select Device</span>
+          </div>
+          <div class="telemetry-grid">
+            <div class="telemetry-item">
+              <div class="telemetry-label">Latitude</div>
+              <div id="val-lat" class="telemetry-val highlight">--.------</div>
+            </div>
+            <div class="telemetry-item">
+              <div class="telemetry-label">Longitude</div>
+              <div id="val-lng" class="telemetry-val highlight">--.------</div>
+            </div>
+            <div class="telemetry-item">
+              <div class="telemetry-label">Distance Traveled</div>
+              <div id="val-distance" class="telemetry-val">0.00 km</div>
+            </div>
+            <div class="telemetry-item">
+              <div class="telemetry-label">Updates Received</div>
+              <div id="val-updates" class="telemetry-val">0</div>
+            </div>
+            <div class="telemetry-item telemetry-full">
+              <div class="telemetry-label">Last Active Time</div>
+              <div id="val-time" class="telemetry-val" style="font-size: 12px;">Never</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Payload Log -->
+        <div class="card">
+          <div class="card-title" style="margin-bottom: 8px;">
+            <i data-lucide="terminal"></i> Live Payload JSON
+          </div>
+          <div id="payload-display" class="payload-box">No messages received yet. Connect to broker or start simulation.</div>
+        </div>
+
+        <!-- Simulator Card -->
+        <div class="card simulator-panel" id="simulator-card">
+          <div class="card-title">
+            <i data-lucide="navigation"></i> GPS Simulator
+          </div>
+          <div class="switch-container">
+            <div>
+              <span style="font-size: 14px; font-weight: 500; display: block; color: var(--text-primary);">Multi-Device Simulation</span>
+              <span style="font-size: 11px; color: var(--text-muted);">Simulates 5 active devices concurrently</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top: 10px;">
+            <button id="sim-start-btn" class="btn btn-secondary">
+              <i data-lucide="play" style="width: 16px; height: 16px;"></i> Start Sim
+            </button>
+            <button id="sim-stop-btn" class="btn btn-secondary" disabled>
+              <i data-lucide="square" style="width: 16px; height: 16px;"></i> Stop
+            </button>
+          </div>
+        </div>
+
+        <!-- Code Modal Trigger -->
+        <button id="view-code-btn" class="btn btn-secondary" style="margin-top: auto;">
+          <i data-lucide="code" style="width: 16px; height: 16px;"></i> Get ESP32 Arduino Code
+        </button>
+
+      </div>
+      
+      <!-- Footer -->
+      <footer class="sidebar-footer">
+        Real-time GPS Tracking Dashboard
+      </footer>
+    </aside>
+    
+    <!-- Right Map Container -->
+    <main class="map-container">
+      <div id="map"></div>
+
+      <!-- Sidebar Toggle Tab -->
+      <button id="sidebar-toggle-btn" class="sidebar-toggle-tab" title="Toggle Sidebar">
+        <i data-lucide="chevrons-left" id="sidebar-toggle-icon"></i>
+      </button>
+      
+      <!-- HUD Overlay Controls -->
+      <div class="map-hud">
+        <button id="hud-dark-mode" class="hud-btn active" title="Toggle Dark Map Style">
+          <i data-lucide="moon"></i>
+        </button>
+        <button id="hud-pan-active" class="hud-btn active" title="Lock / Auto-pan to Target">
+          <i data-lucide="crosshair"></i>
+        </button>
+        <button id="hud-clear-path" class="hud-btn" title="Clear Path History">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ESP32 Code Modal -->
+  <div class="modal-overlay" id="code-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2><i data-lucide="cpu" style="color: var(--primary);"></i> ESP32 MQTT & GPS Sketch</h2>
+        <button class="close-btn" id="close-modal-btn">
+          <i data-lucide="x" style="width: 24px; height: 24px;"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>This Arduino code enables your ESP32 to connect to a Wi-Fi network and publish GPS coordinates in JSON format to the MQTT broker. You can customize the Wi-Fi credentials and the MQTT broker settings below.</p>
+        
+        <div class="code-header">
+          <span>ESP32_MQTT_GPS.ino</span>
+          <button id="copy-code-btn" class="btn btn-secondary btn-small" style="width: auto;">
+            <i data-lucide="copy" style="width: 12px; height: 12px;"></i> Copy Code
+          </button>
+        </div>
+        <div class="code-block">
+          <pre><code id="esp32-arduino-code">
+/*
+ * ESP32 MQTT GPS Tracker
+ * -----------------------
+ * This sketch connects an ESP32 to Wi-Fi and publishes GPS coordinates
+ * in JSON format to an MQTT broker over TCP port 1883.
+ *
+ * Hardware Setup (Optional - Neo-6M GPS Module):
+ * - GPS VCC  -> ESP32 3.3V or 5V
+ * - GPS GND  -> ESP32 GND
+ * - GPS TX   -> ESP32 GPIO 16 (RX2)
+ * - GPS RX   -> ESP32 GPIO 17 (TX2)
+ *
+ * Required Libraries:
+ * - PubSubClient (by Nick O'Leary)
+ * - ArduinoJson (by Benoit Blanchon)
+ * - TinyGPS++ (by Mikal Hart) - Optional if using a physical GPS module
+ */
+
+#include &lt;WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+#include &lt;ArduinoJson.h&gt;
+
+// ==================== CONFIGURATION ====================
+// 1. Wi-Fi Settings
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
+
+// 2. MQTT Broker Settings (Standard TCP port 1883)
+const char* mqtt_server = "broker.emqx.io";
+const int mqtt_port = 1883;
+
+// Dynamic device identification variables
+String device_id;
+String mqtt_topic;
+
+// 3. LED Indicator Pin (GPIO 2 is the built-in LED on most ESP32 dev kits)
+const int LED_PIN = 2;
+
+// 4. GPS Pin Setup (Hardware Serial 2)
+#define RXD2 16
+#define TXD2 17
+#define GPS_BAUD 9600
+// =======================================================
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+unsigned long lastPublishTime = 0;
+const unsigned long publishInterval = 5000; // Publish every 5 seconds
+
+// Simulated GPS coordinates when no hardware GPS lock is available
+float simulatedLat = 22.5726;
+float simulatedLng = 88.3639;
+
+bool useRealGPS = false;
+
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(GPS_BAUD, SERIAL_8N1, RXD2, TXD2);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  Serial.println("\n--- ESP32 MQTT GPS Tracker Starting ---");
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+
+  uint64_t chipid = ESP.getEfuseMac();
+  char devId[30];
+  snprintf(devId, sizeof(devId), "ESP32-%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
+  device_id = String(devId);
+  mqtt_topic = "esp32/" + device_id + "/location";
+
+  Serial.print("Device ID: ");
+  Serial.println(device_id);
+  Serial.print("MQTT Topic: ");
+  Serial.println(mqtt_topic);
+}
+
+void setup_wifi() {
+  delay(10);
+  Serial.print("Connecting to Wi-Fi SSID: ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    digitalWrite(LED_PIN, HIGH);
+    delay(250);
+    digitalWrite(LED_PIN, LOW);
+    delay(250);
+    Serial.print(".");
+  }
+
+  digitalWrite(LED_PIN, HIGH);
+  Serial.println("\nWi-Fi Connected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection to broker...");
+    if (client.connect(device_id.c_str())) {
+      Serial.println("CONNECTED to MQTT Broker.");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" - trying again in 5 seconds.");
+      for (int i = 0; i < 5; i++) {
+        digitalWrite(LED_PIN, HIGH);
+        delay(100);
+        digitalWrite(LED_PIN, LOW);
+        delay(100);
+      }
+      delay(4000);
+    }
+  }
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  while (Serial2.available() > 0) {
+    char c = Serial2.read();
+    // Uncomment and use TinyGPS++ here when a GPS module is connected
+    // gps.encode(c);
+    useRealGPS = true;
+  }
+
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastPublishTime >= publishInterval) {
+    lastPublishTime = currentMillis;
+
+    float finalLat = 0.0;
+    float finalLng = 0.0;
+    bool locationValid = false;
+
+    if (useRealGPS) {
+      // Real GPS logic can be enabled here when TinyGPS++ is available
+      /*
+      if (gps.location.isValid()) {
+        finalLat = gps.location.lat();
+        finalLng = gps.location.lng();
+        locationValid = true;
+      }
+      */
+    }
+
+    if (!locationValid) {
+      simulatedLat += ((float)random(-150, 150) / 100000.0);
+      simulatedLng += ((float)random(-150, 150) / 100000.0);
+      finalLat = simulatedLat;
+      finalLng = simulatedLng;
+      locationValid = true;
+      Serial.print("Simulated GPS: ");
+    }
+
+    if (locationValid) {
+      StaticJsonDocument<200> doc;
+      doc["latitude"] = finalLat;
+      doc["longitude"] = finalLng;
+      doc["device_id"] = device_id;
+      doc["timestamp"] = currentMillis;
+      doc["wifi_rssi"] = WiFi.RSSI();
+
+      char jsonBuffer[256];
+      serializeJson(doc, jsonBuffer);
+
+      Serial.print("Publishing to ");
+      Serial.print(mqtt_topic);
+      Serial.print(": ");
+      Serial.println(jsonBuffer);
+
+      if (client.publish(mqtt_topic.c_str(), jsonBuffer)) {
+        digitalWrite(LED_PIN, LOW);
+        delay(100);
+        digitalWrite(LED_PIN, HIGH);
+      } else {
+        Serial.println("MQTT Publish failed!");
+      }
+    }
+  }
+}
+          </code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+  
+  <!-- MQTT.js over WebSockets -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  
+  <!-- App JavaScript logic -->
+  <script src="app.js"></script>
+
+  <!-- Sidebar Toggle Logic -->
+  <script>
+    (function () {
+      const toggleBtn = document.getElementById('sidebar-toggle-btn');
+      const toggleIcon = document.getElementById('sidebar-toggle-icon');
+      const appContainer = document.querySelector('.app-container');
+      const sidebar = document.querySelector('.sidebar');
+      let hidden = false;
+
+      toggleBtn.addEventListener('click', function () {
+        hidden = !hidden;
+        sidebar.classList.toggle('sidebar-hidden', hidden);
+        appContainer.classList.toggle('sidebar-collapsed', hidden);
+        // Swap chevron direction
+        toggleIcon.setAttribute('data-lucide', hidden ? 'chevrons-right' : 'chevrons-left');
+        lucide.createIcons();
+        // Notify Leaflet that map size changed after CSS transition ends
+        setTimeout(function () {
+          if (typeof map !== 'undefined' && map) map.invalidateSize();
+        }, 350);
+      });
+    })();
+</script>
+</body>
+</html>
