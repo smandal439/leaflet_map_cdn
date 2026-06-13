@@ -106,7 +106,7 @@ body {
 }
 
 .sidebar-header .logo-icon {
-  background: linear-gradient(135deg, var(--primary), #3b82f6);
+  background: linear-gradient(135deg, var(--primary), #f6863b);
   width: 42px;
   height: 42px;
   border-radius: 12px;
