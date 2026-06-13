@@ -129,6 +129,24 @@
           <div id="payload-display" class="payload-box">No messages received yet. Connect to broker or start simulation.</div>
         </div>
 
+        <!-- Storage Status Card -->
+        <div class="card">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span><i data-lucide="database"></i> Local Storage</span>
+            <span id="db-status-pill" class="status-pill disconnected" style="padding: 4px 10px; font-size: 11px;">Disconnected</span>
+          </div>
+          <div class="storage-stats-grid">
+            <div class="storage-stat-item">
+              <div class="storage-stat-label">Records Saved</div>
+              <div id="db-record-count" class="storage-stat-value">0</div>
+            </div>
+            <div class="storage-stat-item">
+              <div class="storage-stat-label">Last Saved</div>
+              <div id="db-last-saved" class="storage-stat-value">Never</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Simulator Card -->
         <div class="card simulator-panel" id="simulator-card">
           <div class="card-title">

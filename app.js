@@ -21,6 +21,15 @@ const DEVICE_PATH_COLORS = [
 ];
 let deviceColorIndex = 0;
 
+// Browser persistence state
+let db = null;
+let dbReady = false;
+const dbName = 'esp32_gps_dashboard';
+const dbVersion = 1;
+let dbStatusPill = null;
+let dbRecordCountEl = null;
+let dbLastSavedEl = null;
+
 // UI elements for device tracking
 let deviceListContainer;
 let deviceCountElement;
@@ -88,12 +97,18 @@ window.addEventListener('DOMContentLoaded', () => {
   deviceListContainer = document.getElementById('device-list');
   deviceCountElement = document.getElementById('device-count');
   selectedDeviceText = document.getElementById('selected-device-id');
+  dbStatusPill = document.getElementById('db-status-pill');
+  dbRecordCountEl = document.getElementById('db-record-count');
+  dbLastSavedEl = document.getElementById('db-last-saved');
 
   // Initialize Lucide Icons
   lucide.createIcons();
 
   // Load Settings from LocalStorage
   loadSettings();
+
+  // Initialize browser storage
+  initDatabase();
 
   // Initialize Map
   initMap();
@@ -152,6 +167,114 @@ function loadSettings() {
   if (broker) brokerInput.value = broker;
   if (topic) topicInput.value = topic;
   if (username) usernameInput.value = username;
+}
+
+function initDatabase() {
+  if (!('indexedDB' in window)) {
+    console.warn('IndexedDB is not supported by this browser.');
+    updateDatabaseStatus('unsupported');
+    return;
+  }
+
+  updateDatabaseStatus('initializing');
+  const request = indexedDB.open(dbName, dbVersion);
+
+  request.onupgradeneeded = (event) => {
+    const database = event.target.result;
+    if (!database.objectStoreNames.contains('gpsRecords')) {
+      const store = database.createObjectStore('gpsRecords', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('deviceId', 'deviceId', { unique: false });
+      store.createIndex('timestamp', 'timestamp', { unique: false });
+    }
+  };
+
+  request.onsuccess = (event) => {
+    db = event.target.result;
+    dbReady = true;
+    updateDatabaseStatus('ready');
+    countStoredRecords();
+  };
+
+  request.onerror = (event) => {
+    console.error('IndexedDB open error:', event.target.error);
+    updateDatabaseStatus('error');
+  };
+}
+
+function updateDatabaseStatus(status) {
+  if (!dbStatusPill) return;
+  dbStatusPill.className = `status-pill ${status}`;
+
+  switch (status) {
+    case 'ready':
+      dbStatusPill.innerText = 'Ready';
+      break;
+    case 'initializing':
+      dbStatusPill.innerText = 'Initializing';
+      break;
+    case 'saving':
+      dbStatusPill.innerText = 'Saving';
+      break;
+    case 'error':
+      dbStatusPill.innerText = 'Error';
+      break;
+    case 'unsupported':
+      dbStatusPill.innerText = 'Unsupported';
+      break;
+    default:
+      dbStatusPill.innerText = status;
+  }
+}
+
+function countStoredRecords() {
+  if (!dbReady || !db) return;
+  const transaction = db.transaction('gpsRecords', 'readonly');
+  const store = transaction.objectStore('gpsRecords');
+  const countRequest = store.count();
+
+  countRequest.onsuccess = () => {
+    if (dbRecordCountEl) {
+      dbRecordCountEl.innerText = countRequest.result.toString();
+    }
+  };
+
+  countRequest.onerror = (event) => {
+    console.error('IndexedDB count error:', event.target.error);
+  };
+}
+
+function saveIncomingRecord(data, receivedTopic, rawPayload) {
+  if (!dbReady || !db) return;
+  updateDatabaseStatus('saving');
+
+  const transaction = db.transaction('gpsRecords', 'readwrite');
+  const store = transaction.objectStore('gpsRecords');
+
+  const record = {
+    receivedAt: Date.now(),
+    topic: receivedTopic || '',
+    payload: rawPayload || '',
+    deviceId: data.device_id || 'ESP32-UNKNOWN',
+    latitude: parseFloat(data.latitude),
+    longitude: parseFloat(data.longitude),
+    timestamp: data.timestamp || null,
+    wifi_rssi: data.wifi_rssi,
+    rawData: data
+  };
+
+  const request = store.add(record);
+  request.onsuccess = () => {
+    updateDatabaseStatus('ready');
+    if (dbLastSavedEl) {
+      dbLastSavedEl.innerText = new Date().toLocaleTimeString();
+    }
+    countStoredRecords();
+  };
+
+  request.onerror = (event) => {
+    console.error('Failed to write GPS record:', event.target.error);
+    updateDatabaseStatus('error');
+  };
 }
 
 // Connection Toggle Action
@@ -389,6 +512,8 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
     if (!deviceId) {
       deviceId = "ESP32-UNKNOWN";
     }
+
+    saveIncomingRecord(data, receivedTopic, payloadString);
 
     // Display raw payload in JSON box only if it's the selected device or no device is selected yet
     if (!selectedDeviceId || selectedDeviceId === deviceId) {
