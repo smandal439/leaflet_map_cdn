@@ -1,0 +1,112 @@
+Reviewing the project files and data flow so I can wire incoming device data into a database.
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn)
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/index.html#1-1), lines 1 to 200
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#1-1), lines 1 to 250
+
+Checking the MQTT message flow and where incoming telemetry is processed so I can add a persistence path.
+
+Searched for regex `onMessage|handleMessage|payload|mqtt|Paho|mqtt client|new Paho|MQTT` (`**/*.{js,html,ino}`), 50 results
+
+Inspecting the remaining client code and message handler to determine where persistence can be added.
+
+Searched for regex `connectToBroker|disconnectFromBroker|onMessage|onConnectionLost|messageArrived|subscribe|publish|Paho|mqtt` (`**/app.js`), 32 results
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#240-240), lines 240 to 420
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#420-420), lines 420 to 580
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#580-580), lines 580 to 780
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#780-780), lines 780 to 813
+
+I found the incoming message handler; next I’m checking for existing persistence or database-related code before editing.
+
+Searched for regex `IndexedDB|localStorage|Storage|database|indexedDB|openDatabase|sqlite|fetch\(|POST` (`**/index.html`), no results
+
+Reading style rules for cards so the new database status line fits the existing dashboard design.
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/style.css#1-1), lines 1 to 260
+
+I’ve found the message path in app.js; now I’m verifying external script imports and then adding browser-side persistence without changing the app architecture.
+
+Searched for regex `<script|mqtt.connect|mqtt` (`**/index.html`), 44 results
+
+Reviewing project documentation for intended persistence options so the added storage matches the app design.
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/README.md)
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/implementation_plan.md)
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/implementation_plan_2.md)
+
+Adding IndexedDB persistence and UI hooks for saved GPS device records.
+
+Replacing 44 lines with 169 lines in [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js)
+
+
+```
+
+```
+
+
+Searched for regex `db-status-pill|db-record-count|db-last-saved` (`**/index.html`), no results
+
+I’ve updated the persistence logic; now I’m wiring the dashboard UI so the database state is visible and styled correctly.
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/index.html#1-1), lines 1 to 130
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/index.html#130-130), lines 130 to 220
+
+Updating the dashboard HTML and CSS so the IndexedDB persistence status and counters are visible and styled.
+
+Replacing 19 lines with 56 lines in [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/index.html), [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/style.css)
+
+
+```
+
+```
+
+```
+
+```
+Now verifying the updated app.js around the database and saving functions for syntax and proper placement.
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#1-1), lines 1 to 120
+
+Read [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js#120-120), lines 120 to 300
+
+I’m verifying the modified app.js for any syntax or editor-reported issues before summarizing the change.
+
+Checked [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/app.js), no problems found
+
+Searched for regex `db-status-pill|db-record-count|db-last-saved` (`**/index.html`), 3 results
+
+Finishing the local storage UI by styling the new storage stat grid and validating the result.
+
+Replacing 17 lines with 44 lines in [](file:///c%3A/Users/SUSHANTA/Desktop/leaflet_map_cdn/style.css)
+
+
+```
+
+```
+✅ Device incoming GPS messages are now saved to browser IndexedDB.
+
+What changed:
+- app.js
+  - Added `IndexedDB` initialization via `initDatabase()`
+  - Added status tracking UI state for storage
+  - Added `saveIncomingRecord()` that stores each parsed GPS payload as a record
+  - Added record counter and last-saved timestamp updates
+- index.html
+  - Added a new storage status card with `db-status-pill`, `db-record-count`, and `db-last-saved`
+- style.css
+  - Added styling for the new storage stats card and status indicators
+
+Notes:
+- Data is stored locally in the browser under `esp32_gps_dashboard` → `gpsRecords`
+- This is browser-only persistence; if you want a server-side database later, I can wire a backend endpoint next.
+
+Made changes.

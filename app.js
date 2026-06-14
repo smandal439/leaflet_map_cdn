@@ -51,6 +51,13 @@ const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x
   attribution: '© OpenStreetMap contributors, © CartoDB'
 });
 
+const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19,
+  attribution: 'Tiles © Esri, Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+});
+
+let currentBaseLayer = darkTiles;
+
 // UI Elements
 const connPill = document.getElementById('connection-pill');
 const connStatusText = document.getElementById('connection-status-text');
@@ -115,9 +122,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Bind Buttons & Events
   connectBtn.addEventListener('click', toggleConnection);
-  hudDarkMode.addEventListener('click', toggleDarkMode);
+  if (hudDarkMode) {
+    hudDarkMode.addEventListener('click', toggleDarkMode);
+  }
   hudPanActive.addEventListener('click', togglePanActive);
   hudClearPath.addEventListener('click', clearPathHistory);
+
+  // Add base layer control for map views
+  const baseMaps = {
+    'Street': streetTiles,
+    'Dark': darkTiles,
+    'Satellite': satelliteTiles
+  };
+  L.control.layers(baseMaps, null, { position: 'topleft' }).addTo(map);
 
   // Simulator Events
   simStartBtn.addEventListener('click', startSimulator);
@@ -142,6 +159,8 @@ function initMap() {
     zoomControl: true,
     layers: [darkTiles] // Default is Dark Mode
   }).setView([defaultLat, defaultLng], 13);
+
+  currentBaseLayer = darkTiles;
 
   // Initialize Marker Cluster Group
   markerClusterGroup = L.markerClusterGroup({
@@ -807,13 +826,23 @@ function haversineDistance(pt1, pt2) {
 function toggleDarkMode() {
   isDarkMode = !isDarkMode;
   if (isDarkMode) {
-    map.removeLayer(streetTiles);
-    map.addLayer(darkTiles);
-    hudDarkMode.classList.add('active');
+    if (currentBaseLayer !== darkTiles) {
+      map.removeLayer(currentBaseLayer);
+      map.addLayer(darkTiles);
+      currentBaseLayer = darkTiles;
+    }
+    if (hudDarkMode) {
+      hudDarkMode.classList.add('active');
+    }
   } else {
-    map.removeLayer(darkTiles);
-    map.addLayer(streetTiles);
-    hudDarkMode.classList.remove('active');
+    if (currentBaseLayer !== streetTiles) {
+      map.removeLayer(currentBaseLayer);
+      map.addLayer(streetTiles);
+      currentBaseLayer = streetTiles;
+    }
+    if (hudDarkMode) {
+      hudDarkMode.classList.remove('active');
+    }
   }
 }
 
