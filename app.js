@@ -521,7 +521,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
     }
     
     // Determine device ID
-    let deviceId = data.device_id;
+    let deviceId = data.device_id || data.fr || data.to;
     if (!deviceId && receivedTopic) {
       const parts = receivedTopic.split('/');
       if (parts.length >= 2) {
@@ -530,6 +530,33 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
     }
     if (!deviceId) {
       deviceId = "ESP32-UNKNOWN";
+    }
+
+    // Normalize GPS payload from nested HD WGPS structure if present
+    let latValue = data.latitude;
+    let lngValue = data.longitude;
+    let rssi = data.wifi_rssi;
+
+    const nestedGps = data.pc && data.pc['hd:wgps'];
+    if (nestedGps) {
+      latValue = nestedGps.lat ?? latValue;
+      lngValue = nestedGps.lng ?? lngValue;
+      rssi = nestedGps.rssi ?? rssi;
+
+      const latDir = (nestedGps.latD || '').toUpperCase();
+      const lngDir = (nestedGps.lngD || '').toUpperCase();
+      if (typeof latValue === 'string') {
+        latValue = latValue.trim();
+      }
+      if (typeof lngValue === 'string') {
+        lngValue = lngValue.trim();
+      }
+      if (latDir === 'S' && !String(latValue).startsWith('-')) {
+        latValue = '-' + latValue;
+      }
+      if (lngDir === 'W' && !String(lngValue).startsWith('-')) {
+        lngValue = '-' + lngValue;
+      }
     }
 
     saveIncomingRecord(data, receivedTopic, payloadString);
@@ -541,9 +568,8 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
       setTimeout(() => payloadDisplay.classList.remove('highlight'), 300);
     }
 
-    const lat = parseFloat(data.latitude);
-    const lng = parseFloat(data.longitude);
-    const rssi = data.wifi_rssi;
+    const lat = parseFloat(latValue);
+    const lng = parseFloat(lngValue);
 
     if (isNaN(lat) || isNaN(lng)) {
       console.warn("Invalid coordinate payload received:", data);
