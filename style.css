@@ -859,9 +859,18 @@ input:focus {
 }
 
 .device-item.selected {
-  background: rgba(14, 165, 233, 0.15);
-  border-color: var(--primary);
-  box-shadow: 0 0 12px rgba(14, 165, 233, 0.15);
+  background: rgba(14, 165, 233, 0.22);
+  border-color: rgba(14, 165, 233, 0.7);
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.25);
+  color: #ffffff;
+}
+
+.device-item.selected .device-name {
+  color: #ffffff;
+}
+
+.device-item.selected .device-status-dot {
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.7);
 }
 
 .device-item-left {

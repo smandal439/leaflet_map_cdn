@@ -561,9 +561,11 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
 
     saveIncomingRecord(data, receivedTopic, payloadString);
 
+    const formattedPayload = JSON.stringify(data, null, 2);
+
     // Display raw payload in JSON box only if it's the selected device or no device is selected yet
     if (!selectedDeviceId || selectedDeviceId === deviceId) {
-      payloadDisplay.innerText = JSON.stringify(data, null, 2);
+      payloadDisplay.innerText = formattedPayload;
       payloadDisplay.classList.add('highlight');
       setTimeout(() => payloadDisplay.classList.remove('highlight'), 300);
     }
@@ -576,7 +578,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
       return;
     }
 
-    updateGPSPosition(deviceId, lat, lng, rssi);
+    updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload);
 
   } catch (err) {
     console.error("Failed to parse JSON MQTT payload:", err);
@@ -585,7 +587,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
 }
 
 // Update Map & Telemetry UI
-function updateGPSPosition(deviceId, lat, lng, rssi) {
+function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload) {
   const currentLatLng = L.latLng(lat, lng);
   const now = Date.now();
 
@@ -633,7 +635,8 @@ function updateGPSPosition(deviceId, lat, lng, rssi) {
       totalDistance: 0,
       updates: 1,
       lastActiveTime: now,
-      rssi: rssi
+      rssi: rssi,
+      lastPayload: formattedPayload
     };
 
     activeDevices.set(deviceId, dev);
@@ -656,6 +659,7 @@ function updateGPSPosition(deviceId, lat, lng, rssi) {
     dev.pathHistory.push([lat, lng]);
     dev.updates++;
     dev.lastActiveTime = now;
+    dev.lastPayload = formattedPayload;
     if (rssi !== undefined) {
       dev.rssi = rssi;
     }
@@ -727,6 +731,9 @@ function selectDevice(deviceId) {
 
   // Update telemetry details
   updateTelemetryUI(dev);
+  if (dev.lastPayload) {
+    payloadDisplay.innerText = dev.lastPayload;
+  }
 
   // Fly to device with smooth zoom animation (street-level zoom 16)
   if (isPanActive) {
