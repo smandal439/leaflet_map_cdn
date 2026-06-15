@@ -69,6 +69,7 @@ const passwordInput = document.getElementById('mqtt-password');
 
 const valLat = document.getElementById('val-lat');
 const valLng = document.getElementById('val-lng');
+const valBattery = document.getElementById('val-battery');
 const valDistance = document.getElementById('val-distance');
 const valUpdates = document.getElementById('val-updates');
 const valTime = document.getElementById('val-time');
@@ -269,6 +270,18 @@ function saveIncomingRecord(data, receivedTopic, rawPayload) {
   const transaction = db.transaction('gpsRecords', 'readwrite');
   const store = transaction.objectStore('gpsRecords');
 
+  // Normalize battery level from either top-level or nested hd:wgps payload
+  let batteryLevelValue = null;
+  if (data.battery_level !== undefined && data.battery_level !== null && data.battery_level !== '') {
+    batteryLevelValue = parseFloat(data.battery_level);
+  } else if (data.pc && data.pc['hd:wgps']) {
+    const ng = data.pc['hd:wgps'];
+    const nestedBatteryRaw = ng.btper ?? ng.btPer ?? ng.bt_per ?? ng.bt ?? null;
+    if (nestedBatteryRaw !== null && nestedBatteryRaw !== undefined && nestedBatteryRaw !== '') {
+      batteryLevelValue = parseFloat(nestedBatteryRaw);
+    }
+  }
+
   const record = {
     receivedAt: Date.now(),
     topic: receivedTopic || '',
@@ -276,6 +289,7 @@ function saveIncomingRecord(data, receivedTopic, rawPayload) {
     deviceId: data.device_id || 'ESP32-UNKNOWN',
     latitude: parseFloat(data.latitude),
     longitude: parseFloat(data.longitude),
+    batteryLevel: batteryLevelValue,
     timestamp: data.timestamp || null,
     wifi_rssi: data.wifi_rssi,
     rawData: data
@@ -535,6 +549,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
     // Normalize GPS payload from nested HD WGPS structure if present
     let latValue = data.latitude;
     let lngValue = data.longitude;
+    let batteryLevel = data.battery_level !== undefined ? parseFloat(data.battery_level) : null;
     let rssi = data.wifi_rssi;
 
     const nestedGps = data.pc && data.pc['hd:wgps'];
@@ -542,6 +557,11 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
       latValue = nestedGps.lat ?? latValue;
       lngValue = nestedGps.lng ?? lngValue;
       rssi = nestedGps.rssi ?? rssi;
+      // Support multiple casing/variants for battery percentage keys (btper, btPer, bt_per, bt)
+      const nestedBatteryRaw = nestedGps.btper ?? nestedGps.btPer ?? nestedGps.bt_per ?? nestedGps.bt ?? null;
+      if (nestedBatteryRaw !== null && nestedBatteryRaw !== undefined && nestedBatteryRaw !== '') {
+        batteryLevel = parseFloat(nestedBatteryRaw);
+      }
 
       const latDir = (nestedGps.latD || '').toUpperCase();
       const lngDir = (nestedGps.lngD || '').toUpperCase();
@@ -551,6 +571,10 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
       if (typeof lngValue === 'string') {
         lngValue = lngValue.trim();
       }
+      if (typeof batteryLevel === 'string') {
+        batteryLevel = batteryLevel.trim();
+      }
+
       if (latDir === 'S' && !String(latValue).startsWith('-')) {
         latValue = '-' + latValue;
       }
@@ -572,13 +596,14 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
 
     const lat = parseFloat(latValue);
     const lng = parseFloat(lngValue);
+    const battery = batteryLevel !== null ? parseFloat(batteryLevel) : null;
 
     if (isNaN(lat) || isNaN(lng)) {
       console.warn("Invalid coordinate payload received:", data);
       return;
     }
 
-    updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload);
+    updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLevel);
 
   } catch (err) {
     console.error("Failed to parse JSON MQTT payload:", err);
@@ -587,7 +612,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
 }
 
 // Update Map & Telemetry UI
-function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload) {
+function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLevel) {
   const currentLatLng = L.latLng(lat, lng);
   const now = Date.now();
 
@@ -636,7 +661,8 @@ function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload) {
       updates: 1,
       lastActiveTime: now,
       rssi: rssi,
-      lastPayload: formattedPayload
+      lastPayload: formattedPayload,
+      batteryLevel: batteryLevel
     };
 
     activeDevices.set(deviceId, dev);
@@ -826,6 +852,7 @@ function updateTelemetryUI(dev) {
     selectedDeviceText.innerText = "Select Device";
     valLat.innerText = "--.------";
     valLng.innerText = "--.------";
+    valBattery.innerText = "--%";
     valDistance.innerText = "0.00 km";
     valUpdates.innerText = "0";
     valTime.innerText = "Never";
@@ -835,6 +862,7 @@ function updateTelemetryUI(dev) {
   selectedDeviceText.innerText = dev.deviceId;
   valLat.innerText = dev.lastLatLng.lat.toFixed(6);
   valLng.innerText = dev.lastLatLng.lng.toFixed(6);
+  valBattery.innerText = dev.batteryLevel !== null ? dev.batteryLevel.toFixed(0) + "%" : "--%";
   valDistance.innerText = dev.totalDistance.toFixed(2) + " km";
   valUpdates.innerText = dev.updates;
   valTime.innerText = new Date(dev.lastActiveTime).toLocaleTimeString();
