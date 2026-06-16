@@ -996,6 +996,7 @@ function startSimulator() {
         latitude: parseFloat(simDev.lat.toFixed(6)),
         longitude: parseFloat(simDev.lng.toFixed(6)),
         device_id: simDev.deviceId,
+        battery_level: parseFloat((Math.random() * 100).toFixed(1)), // 0.0% to 100.0%
         timestamp: Date.now(),
         wifi_rssi: -Math.floor(Math.random() * 30 + 55) // -55 to -85 dBm
       };
