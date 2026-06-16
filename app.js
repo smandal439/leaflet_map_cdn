@@ -966,12 +966,12 @@ function startSimulator() {
   simStopBtn.disabled = false;
   simCard.classList.add('sim-active-border');
 
-  // Initialize 5 simulated devices around map center or default
+  // Initialize 10 simulated devices around map center or default
   const centerLat = map.getCenter().lat;
   const centerLng = map.getCenter().lng;
 
   simDevices = [];
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 10; i++) {
     const offsetLat = (Math.random() - 0.5) * 0.01;
     const offsetLng = (Math.random() - 0.5) * 0.01;
     simDevices.push({
