@@ -78,6 +78,7 @@ const payloadDisplay = document.getElementById('payload-display');
 const hudDarkMode = document.getElementById('hud-dark-mode');
 const hudPanActive = document.getElementById('hud-pan-active');
 const hudClearPath = document.getElementById('hud-clear-path');
+let clearStorageBtn = null;
 
 const simStartBtn = document.getElementById('sim-start-btn');
 const simStopBtn = document.getElementById('sim-stop-btn');
@@ -108,6 +109,7 @@ window.addEventListener('DOMContentLoaded', () => {
   dbStatusPill = document.getElementById('db-status-pill');
   dbRecordCountEl = document.getElementById('db-record-count');
   dbLastSavedEl = document.getElementById('db-last-saved');
+  clearStorageBtn = document.getElementById('clear-storage-btn');
 
   // Initialize Lucide Icons
   lucide.createIcons();
@@ -140,6 +142,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // Simulator Events
   simStartBtn.addEventListener('click', startSimulator);
   simStopBtn.addEventListener('click', stopSimulator);
+  if (clearStorageBtn) {
+    clearStorageBtn.addEventListener('click', clearStoredData);
+  }
 
   // Modal Events
   viewCodeBtn.addEventListener('click', () => showModal(true));
@@ -260,6 +265,34 @@ function countStoredRecords() {
 
   countRequest.onerror = (event) => {
     console.error('IndexedDB count error:', event.target.error);
+  };
+}
+
+function clearStoredData() {
+  if (!dbReady || !db) return;
+  if (!confirm('Clear all stored GPS data from IndexedDB? This cannot be undone.')) {
+    return;
+  }
+
+  updateDatabaseStatus('saving');
+  const transaction = db.transaction('gpsRecords', 'readwrite');
+  const store = transaction.objectStore('gpsRecords');
+  const clearRequest = store.clear();
+
+  clearRequest.onsuccess = () => {
+    updateDatabaseStatus('ready');
+    if (dbRecordCountEl) {
+      dbRecordCountEl.innerText = '0';
+    }
+    if (dbLastSavedEl) {
+      dbLastSavedEl.innerText = 'Never';
+    }
+    countStoredRecords();
+  };
+
+  clearRequest.onerror = (event) => {
+    console.error('Failed to clear stored data:', event.target.error);
+    updateDatabaseStatus('error');
   };
 }
 
