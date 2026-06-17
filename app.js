@@ -69,6 +69,7 @@ const passwordInput = document.getElementById('mqtt-password');
 
 const valLat = document.getElementById('val-lat');
 const valLng = document.getElementById('val-lng');
+const valAlt = document.getElementById('val-alt');
 const valBattery = document.getElementById('val-battery');
 const valDistance = document.getElementById('val-distance');
 const valUpdates = document.getElementById('val-updates');
@@ -322,6 +323,7 @@ function saveIncomingRecord(data, receivedTopic, rawPayload) {
     deviceId: data.device_id || 'ESP32-UNKNOWN',
     latitude: parseFloat(data.latitude),
     longitude: parseFloat(data.longitude),
+    altitude: parseFloat(data.altitude),
     batteryLevel: batteryLevelValue,
     timestamp: data.timestamp || null,
     wifi_rssi: data.wifi_rssi,
@@ -582,6 +584,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
     // Normalize GPS payload from nested HD WGPS structure if present
     let latValue = data.latitude;
     let lngValue = data.longitude;
+    let altValue = data.altitude;
     let batteryLevel = data.battery_level !== undefined ? parseFloat(data.battery_level) : null;
     let rssi = data.wifi_rssi;
 
@@ -589,6 +592,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
     if (nestedGps) {
       latValue = nestedGps.lat ?? latValue;
       lngValue = nestedGps.lng ?? lngValue;
+      altValue = nestedGps.alt ?? altValue;
       rssi = nestedGps.rssi ?? rssi;
       // Support multiple casing/variants for battery percentage keys (btper, btPer, bt_per, bt)
       const nestedBatteryRaw = nestedGps.btper ?? nestedGps.btPer ?? nestedGps.bt_per ?? nestedGps.bt ?? null;
@@ -629,14 +633,16 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
 
     const lat = parseFloat(latValue);
     const lng = parseFloat(lngValue);
+    const alt = parseFloat(altValue);
     const battery = batteryLevel !== null ? parseFloat(batteryLevel) : null;
 
     if (isNaN(lat) || isNaN(lng)) {
       console.warn("Invalid coordinate payload received:", data);
       return;
     }
-
-    updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLevel);
+    
+    // pass normalized numeric battery value (battery) and altitude
+    updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, battery, alt);
 
   } catch (err) {
     console.error("Failed to parse JSON MQTT payload:", err);
@@ -645,7 +651,7 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
 }
 
 // Update Map & Telemetry UI
-function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLevel) {
+function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLevel, altitude) {
   const currentLatLng = L.latLng(lat, lng);
   const now = Date.now();
 
@@ -695,7 +701,8 @@ function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLe
       lastActiveTime: now,
       rssi: rssi,
       lastPayload: formattedPayload,
-      batteryLevel: batteryLevel
+      batteryLevel: batteryLevel,
+      altitude: altitude
     };
 
     activeDevices.set(deviceId, dev);
@@ -721,6 +728,14 @@ function updateGPSPosition(deviceId, lat, lng, rssi, formattedPayload, batteryLe
     dev.lastPayload = formattedPayload;
     if (rssi !== undefined) {
       dev.rssi = rssi;
+    }
+
+    // Update battery & altitude when new values are received
+    if (batteryLevel !== undefined && batteryLevel !== null && !isNaN(batteryLevel)) {
+      dev.batteryLevel = parseFloat(batteryLevel);
+    }
+    if (altitude !== undefined && altitude !== null && !isNaN(altitude)) {
+      dev.altitude = parseFloat(altitude);
     }
 
     // Extend this device's own path polyline (guarded in case polyline is not yet ready)
@@ -886,6 +901,7 @@ function updateTelemetryUI(dev) {
     valLat.innerText = "--.------";
     valLng.innerText = "--.------";
     valBattery.innerText = "--%";
+    valAlt.innerText = "--.--m";
     valDistance.innerText = "0.00 km";
     valUpdates.innerText = "0";
     valTime.innerText = "Never";
@@ -896,6 +912,7 @@ function updateTelemetryUI(dev) {
   valLat.innerText = dev.lastLatLng.lat.toFixed(6);
   valLng.innerText = dev.lastLatLng.lng.toFixed(6);
   valBattery.innerText = dev.batteryLevel !== null ? dev.batteryLevel.toFixed(0) + "%" : "--%";
+  valAlt.innerText = (dev.altitude !== undefined && dev.altitude !== null && !isNaN(dev.altitude)) ? dev.altitude.toFixed(2) + " m" : "--.--m";
   valDistance.innerText = dev.totalDistance.toFixed(2) + " km";
   valUpdates.innerText = dev.updates;
   valTime.innerText = new Date(dev.lastActiveTime).toLocaleTimeString();
@@ -997,6 +1014,8 @@ function startSimulator() {
 
   simStartBtn.disabled = true;
   simStopBtn.disabled = false;
+  simStartBtn.classList.add('active');
+  simStopBtn.classList.remove('active');
   simCard.classList.add('sim-active-border');
 
   // Initialize 10 simulated devices around map center or default
@@ -1056,6 +1075,8 @@ function stopSimulator() {
 
   simStartBtn.disabled = false;
   simStopBtn.disabled = true;
+  simStartBtn.classList.remove('active');
+  simStopBtn.classList.remove('active');
   simCard.classList.remove('sim-active-border');
   console.log("GPS simulation stopped.");
 }
