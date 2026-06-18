@@ -608,6 +608,9 @@ function processIncomingGPS(payloadData, receivedTopic = '') {
       if (typeof lngValue === 'string') {
         lngValue = lngValue.trim();
       }
+      if (typeof altValue === 'string') {
+        altValue = altValue.trim();
+      }
       if (typeof batteryLevel === 'string') {
         batteryLevel = batteryLevel.trim();
       }
@@ -811,7 +814,7 @@ function selectDevice(deviceId) {
 
   // Fly to device with smooth zoom animation (street-level zoom 16)
   if (isPanActive) {
-    map.flyTo(dev.lastLatLng, 16, {
+    map.flyTo(dev.lastLatLng, 19, {
       animate: true,
       duration: 0.8,   // seconds
       easeLinearity: 0.25
@@ -1040,16 +1043,17 @@ function startSimulator() {
     simDevices.forEach(simDev => {
       const driftLat = (Math.random() - 0.5) * 0.0004;
       const driftLng = (Math.random() - 0.5) * 0.0004;
-      
+      const driftAlt = (Math.random() - 0.5) * 0.4;
       
       simDev.lat += driftLat;
       simDev.lng += driftLng;
+      simDev.alt += driftAlt;
 
       const payloadObj = {
         latitude: parseFloat(simDev.lat.toFixed(6)),
         longitude: parseFloat(simDev.lng.toFixed(6)),
+        altitude: parseFloat(simDev.alt.toFixed(2)),
         device_id: simDev.deviceId,
-
         battery_level: parseFloat((Math.random() * 100).toFixed(1)), // 0.0% to 100.0%
         timestamp: Date.now(),
         wifi_rssi: -Math.floor(Math.random() * 30 + 55) // -55 to -85 dBm
